@@ -226,6 +226,8 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				uid = 0
 			} else if ok := strings.HasPrefix(uidVal, "_:"); ok {
 				mr.uid = uidVal
+			} else if ok := strings.HasPrefix(uidVal, "uid("); ok {
+				mr.uid = uidVal
 			} else if u, err := strconv.ParseUint(uidVal, 0, 64); err == nil {
 				uid = u
 			} else {
