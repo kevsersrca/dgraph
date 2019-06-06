@@ -157,3 +157,150 @@ func TestUpsertMutationJSON(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, res, "Ashish")
 }
+
+func TestUpsert1(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`age: int @index(int) .
+  friend: uid @reverse .`))
+
+	m1 := `
+  upsert {
+    mutation {
+      set {
+        _:user1 <age> "45" .
+      }
+    }
+
+    query {
+      me(func: eq(age, 34)) {
+        ...fragmentA
+        friend {
+          ...fragmentA
+          age
+        }
+      }
+    }
+
+    fragment fragmentA {
+      uid
+    }
+  }`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.Contains(t, err.Error(), "upsert query op has no variables")
+}
+
+func TestUpsert2(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`age: int @index(int) .
+  friend: uid @reverse .`))
+
+	m1 := `
+  upsert {
+    mutation {
+      set {
+        uid(variable) <age> "45" .
+      }
+    }
+
+    query {
+      me(func: eq(age, 34)) {
+        friend {
+          ...fragmentA
+        }
+      }
+    }
+
+    fragment fragmentA {
+      variable as uid
+    }
+  }`
+	keys, preds, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+	require.True(t, 0 == len(keys))
+	require.True(t, contains(preds, "age"))
+
+	keys, preds, _, err = mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+	require.True(t, 0 == len(keys))
+	require.True(t, contains(preds, "age"))
+}
+
+func TestUpsert3(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`age: int @index(int) .
+  name: string @index(exact) .
+  friend: uid @reverse .`))
+
+	m1 := `
+    {
+      set {
+        uid(variable) <age> "45" .
+      }
+    }
+`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.Contains(t, err.Error(), "invalid syntax")
+}
+
+func TestUpsert4(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`age: int @index(int) .
+  name: string @index(exact) .
+  friend: uid @reverse .`))
+
+	m1 := `
+  upsert {
+    mutation {
+      set {
+        uid(42) <age> "45" .
+        uid(variable) <age> "45" .
+      }
+    }
+
+    query {
+      me(func: eq(age, 34)) {
+        friend {
+          ...fragmentA
+        }
+      }
+    }
+
+    fragment fragmentA {
+      variable as uid
+    }
+  }`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.Contains(t, err.Error(), "Some variables are used but not defined")
+}
+
+func TestUpsert5(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`age: int @index(int) .
+  name: string @index(exact) .
+  friend: uid @reverse .`))
+
+	m1 := `
+  upsert {
+    mutation {
+      set {
+        uid(var2) <age> "45" .
+      }
+    }
+
+    query {
+      me(func: eq(age, 34)) {
+        var2 as uid
+        friend {
+          ...fragmentA
+        }
+      }
+    }
+
+    fragment fragmentA {
+      var1 as uid
+      name
+    }
+  }`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.Contains(t, err.Error(), "Some variables are defined but not used")
+}
